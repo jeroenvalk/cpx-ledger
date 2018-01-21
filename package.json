@@ -1,0 +1,9 @@
+{
+	"name": "cpx-ledger",
+	"version": "0.0.1-SNAPSHOT",
+	"main": "src/main/index.js",
+	"dependencies": {
+		"csv-parse": "^2.0.0",
+		"js-yaml": "^3.10.0"
+	}
+}
