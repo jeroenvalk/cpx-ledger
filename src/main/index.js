@@ -396,18 +396,14 @@ module.exports = function (_) {
 					default:
 						throw new Error(record.asset);
 				}
-				_.update(result, [timestamp, "Assets:Crypto:Exchange:Kraken:Holdings"], updater([amount - fee, asset].join(" ")));
+				_.update(result, [timestamp, "Assets:Crypto:Exchange:Kraken:Trading"], updater([amount - fee, asset].join(" ")));
 				if (fee > 0) _.update(result, [timestamp, "Expenses:Crypto:Exchange:Kraken:Fees"], updater([fee, asset].join(" ")));
 			},
 			end: function () {
 				_.each(result, function (value) {
-					const amounts = value["Assets:Crypto:Exchange:Kraken:Holdings"];
+					const amounts = value["Assets:Crypto:Exchange:Kraken:Trading"];
 					if (!(amounts instanceof Array)) {
-						if (parseInt(amounts.split(" ")[0]) < 0) {
-							value["Assets:Crypto:Exchange:Kraken:Withdrawals"] = null;
-						} else {
-							value["Assets:Crypto:Exchange:Kraken:Deposits"] = null;
-						}
+						value["Assets:Crypto:Exchange:Kraken:Funding"] = null;
 					}
 				});
 				channel.write(o.wr, result);
