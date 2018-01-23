@@ -20,10 +20,10 @@ module.exports = function (_) {
 
 	_ = require('composix')(_);
 
-	_.module("pipe", ["channel"], function(channel) {
-		const readChannel = function(rd, callback) {
-			const recurse = function() {
-				channel.read(rd, 1, function(array) {
+	_.module("pipe", ["channel"], function (channel) {
+		const readChannel = function (rd, callback) {
+			const recurse = function () {
+				channel.read(rd, 1, function (array) {
 					callback(array);
 					if (array.length > 0) {
 						recurse();
@@ -33,16 +33,23 @@ module.exports = function (_) {
 			recurse();
 		};
 
-		const readStream = function(readable, callback) {
-			readable.on("data", function(chunk) {
+		const readStream = function (readable, callback) {
+			if (readable instanceof Array) {
+				for (var i = 0; i < readable.length; ++i) {
+					callback([readable[i]]);
+				}
+				callback([]);
+				return;
+			}
+			readable.on("data", function (chunk) {
 				callback([chunk]);
 			});
-			readable.on("end", function() {
+			readable.on("end", function () {
 				callback([]);
 			});
 		};
 
-		const writeChannel = function(wr, array) {
+		const writeChannel = function (wr, array) {
 			if (array.length > 0) {
 				channel.write(wr, array[0]);
 			} else {
@@ -50,7 +57,7 @@ module.exports = function (_) {
 			}
 		};
 
-		const writeStream = function(writable, array) {
+		const writeStream = function (writable, array) {
 			if (array.length > 0) {
 				writable.write(array[0]);
 			} else {
@@ -63,35 +70,91 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module('ledgerNormalize', ['channel', 'pipe'], function(channel, pipe) {
+	_.module('pipeline', ['pipe'], function (pipe) {
+		const path = require('path'), fs = require('fs');
+		return function (source) {
+			var size = arguments.length;
+			const argv = arguments, callback = argv[--size];
+
+			const wrapper = function(value) {
+				const result = callback(value);
+				if (result) {
+					_.each(result, function(value, key) {
+						fs.writeFileSync(key, value);
+					});
+				}
+			};
+
+			const closure = function () {
+				var target = {
+					write: wrapper,
+					end: function () {
+					}
+				};
+				while (size > 1) {
+					pipe(argv[--size].rd, target);
+					target = argv[size].wr;
+				}
+				pipe(source, target);
+			};
+
+			switch (typeof source) {
+				case 'string':
+					fs.stat(source, function (err, stats) {
+						if (err) {
+							throw err;
+						}
+						if (stats.isFile()) {
+							source = fs.createReadStream(source);
+							closure();
+						} else if (stats.isDirectory()) {
+							fs.readdir(source, function (err, files) {
+								source = _.map(files, function (file) {
+									return path.parse([source, file].join("/"))
+								});
+								closure();
+							});
+						} else {
+							throw new Error();
+						}
+					});
+					break;
+				default:
+					closure();
+					break;
+			}
+		};
+	});
+
+	_.module('ledgerNormalize', ['channel', 'pipe'], function (channel, pipe) {
 		const i = channel.create(true), o = channel.create(true);
 
-		const whitespace = function(str) {
+		const whitespace = function (str) {
 			return str.split(/\s+/).join(" ");
 		};
 
 		const recurse = function (object) {
 			const result = {};
 			var i, todo;
-			switch(typeof object) {
+			switch (typeof object) {
 				case 'string':
 				case 'number':
 					object = [object];
-					/* falls through */
+				/* falls through */
 				case 'object':
 					if (object === null) {
 						return [null];
 					}
 					if (object instanceof Array) {
 						for (i = 0; i < object.length; ++i) {
-							switch(typeof object[i]) {
+							switch (typeof object[i]) {
 								case 'object':
 									if (object[i] !== null) {
 										throw new Error("use null to mark a balancing account");
 									}
 									break;
 								case 'string':
-									switch(todo) {
+									switch (todo) {
 										case undefined:
 											todo = true;
 											break;
@@ -100,7 +163,7 @@ module.exports = function (_) {
 									}
 									break;
 								case 'number':
-									switch(todo) {
+									switch (todo) {
 										case undefined:
 											todo = false;
 											break;
@@ -151,7 +214,7 @@ module.exports = function (_) {
 		};
 
 		pipe(i.rd, {
-			write: function(value) {
+			write: function (value) {
 				const result = {};
 				_.each(value, function (value, key) {
 					if (!(value instanceof Array)) {
@@ -169,13 +232,13 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module("flatten", ["channel", "pipe"], function(channel, pipe) {
+	_.module("flatten", ["channel", "pipe"], function (channel, pipe) {
 		const ch = channel.create(true);
 
 		pipe(ch.rd, {
-			write: function(ch) {
+			write: function (ch) {
 				pipe(ch.rd, {
-					write: function(chunk) {
+					write: function (chunk) {
 						channel.write(ch.wr, chunk);
 					}
 				})
@@ -185,18 +248,19 @@ module.exports = function (_) {
 		return ch.wr;
 	});
 
-	_.module("stdout", ["channel", "pipe"], function(channel, pipe) {
+	_.module("stdout", ["channel", "pipe"], function (channel, pipe) {
 		const ch = channel.create();
 		pipe(ch.rd, {
-			write: function(chunk) {
+			write: function (chunk) {
 				process.stdout.write(chunk);
 			},
-			end: function(){}
+			end: function () {
+			}
 		});
 		return ch.wr;
 	});
 
-	_.module("ledgerExport", ["channel", "pipe"], function(channel, pipe) {
+	_.module("ledgerExport", ["channel", "pipe"], function (channel, pipe) {
 		const i = channel.create(true), o = channel.create();
 
 		pipe(i.rd, {
@@ -253,21 +317,21 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module("csv", ["channel", "pipe"], function(channel, pipe) {
+	_.module("csv", ["channel", "pipe"], function (channel, pipe) {
 		const ch = channel.create(true);
 		pipe(ch.rd, {
-			write: function(x) {
+			write: function (x) {
 				const parser = require('csv-parse')(x.config || {columns: true});
-				parser.on("readable", function() {
+				parser.on("readable", function () {
 					var record;
-					while(record = parser.read()) {
+					while (record = parser.read()) {
 						channel.write(x.wr, record);
 					}
 				});
-				parser.on("error", function(err) {
+				parser.on("error", function (err) {
 					throw err;
 				});
-				parser.on("finish", function() {
+				parser.on("finish", function () {
 					channel.write(x.wr, null);
 				});
 				pipe(x.rd, parser);
@@ -276,45 +340,65 @@ module.exports = function (_) {
 		return ch.wr;
 	});
 
-	_.module("importKraken", ["channel", "pipe", "csv", "ledgerNormalize"], function(channel, pipe, csv, ldgr) {
+	_.module("importKraken", ["channel", "pipe", "csv", "ledgerNormalize"], function (channel, pipe, csv, ldgr) {
 		const ch = channel.create(), i = channel.create(true), o = channel.create(true);
 		var result = {};
 
-		pipe(o.rd, ldgr.wr);
-
 		pipe(i.rd, {
-			write: function(record) {
+			write: function (record) {
 				var asset;
 				const timestamp = new Date(record.time).toISOString()
 				const amount = parseFloat(record.amount);
 				const fee = parseFloat(record.fee);
-				switch(record.asset) {
-					case "ZEUR": asset = "EUR"; break;
-					case "XXBT": asset = "BTC"; break;
-					case "DASH": asset = "DASH"; break;
-					case "XXLM": asset = "XLM"; break;
-					case "XXMR": asset = "XMR"; break;
-					case "XLTC": asset = "LTC"; break;
-					case "XETH": asset = "ETH"; break;
-					case "XXRP": asset = "XRP"; break;
-					case "XETC": asset = "ETC"; break;
-					case "BCH": asset = "BCH"; break;
-					case "XREP": asset = "REP"; break;
-					case "XXDG": asset = "XDG"; break;
+				switch (record.asset) {
+					case "ZEUR":
+						asset = "EUR";
+						break;
+					case "XXBT":
+						asset = "BTC";
+						break;
+					case "DASH":
+						asset = "DASH";
+						break;
+					case "XXLM":
+						asset = "XLM";
+						break;
+					case "XXMR":
+						asset = "XMR";
+						break;
+					case "XLTC":
+						asset = "LTC";
+						break;
+					case "XETH":
+						asset = "ETH";
+						break;
+					case "XXRP":
+						asset = "XRP";
+						break;
+					case "XETC":
+						asset = "ETC";
+						break;
+					case "BCH":
+						asset = "BCH";
+						break;
+					case "XREP":
+						asset = "REP";
+						break;
+					case "XXDG":
+						asset = "XDG";
+						break;
 					default:
 						throw new Error(record.asset);
 				}
-				if (fee > 0) _.set(result, [timestamp, "Expenses", "Crypto", "Exchange", "Kraken", "Fees", asset], fee);
-				_.set(result, [timestamp, "Assets", "Crypto", "Exchange", "Kraken", "Holdings", asset], amount - fee);
-
+				if (fee > 0) _.set(result, [timestamp, "Expenses:Crypto:Exchange:Kraken:Fees"], [fee, asset].join(" "));
+				_.set(result, [timestamp, "Assets:Crypto:Exchange:Kraken:Holdings"], [amount - fee, asset].join(" "));
 			},
-			end: function() {
-				_.each(result, function(value) {
-					const exchange = value.Assets.Crypto.Exchange.Kraken;
-					const keys = _.keys(exchange.Holdings);
-					switch(keys.length) {
+			end: function () {
+				_.each(result, function (value) {
+					const amounts = value["Assets:Crypto:Exchange:Kraken:Holdings"];
+					switch (amounts.length) {
 						case 1:
-							if (exchange.Holdings[keys[0]] < 0) {
+							if (parseInt(amounts[0].split(" ")[0]) < 0) {
 								exchange.Withdrawals = {"": null};
 							} else {
 								exchange.Deposits = {"": null};
@@ -334,7 +418,7 @@ module.exports = function (_) {
 
 		return {
 			wr: ch.wr,
-			rd: ldgr.rd
+			rd: o.rd
 		};
 	});
 
