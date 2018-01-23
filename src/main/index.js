@@ -76,10 +76,10 @@ module.exports = function (_) {
 			var size = arguments.length;
 			const argv = arguments, callback = argv[--size];
 
-			const wrapper = function(value) {
+			const wrapper = function (value) {
 				const result = callback(value);
 				if (result) {
-					_.each(result, function(value, key) {
+					_.each(result, function (value, key) {
 						fs.writeFileSync(key, value);
 					});
 				}
@@ -344,6 +344,12 @@ module.exports = function (_) {
 		const ch = channel.create(), i = channel.create(true), o = channel.create(true);
 		var result = {};
 
+		const updater = function(result) {
+			return function(value) {
+				return value ? _.concat(value, result) : result;
+			};
+		};
+
 		pipe(i.rd, {
 			write: function (record) {
 				var asset;
@@ -390,20 +396,18 @@ module.exports = function (_) {
 					default:
 						throw new Error(record.asset);
 				}
-				if (fee > 0) _.set(result, [timestamp, "Expenses:Crypto:Exchange:Kraken:Fees"], [fee, asset].join(" "));
-				_.set(result, [timestamp, "Assets:Crypto:Exchange:Kraken:Holdings"], [amount - fee, asset].join(" "));
+				_.update(result, [timestamp, "Assets:Crypto:Exchange:Kraken:Holdings"], updater([amount - fee, asset].join(" ")));
+				if (fee > 0) _.update(result, [timestamp, "Expenses:Crypto:Exchange:Kraken:Fees"], updater([fee, asset].join(" ")));
 			},
 			end: function () {
 				_.each(result, function (value) {
 					const amounts = value["Assets:Crypto:Exchange:Kraken:Holdings"];
-					switch (amounts.length) {
-						case 1:
-							if (parseInt(amounts[0].split(" ")[0]) < 0) {
-								exchange.Withdrawals = {"": null};
-							} else {
-								exchange.Deposits = {"": null};
-							}
-							break;
+					if (!(amounts instanceof Array)) {
+						if (parseInt(amounts.split(" ")[0]) < 0) {
+							value["Assets:Crypto:Exchange:Kraken:Withdrawals"] = null;
+						} else {
+							value["Assets:Crypto:Exchange:Kraken:Deposits"] = null;
+						}
 					}
 				});
 				channel.write(o.wr, result);
