@@ -47,6 +47,7 @@ module.exports = function (_) {
 			readable.on("end", function () {
 				callback([]);
 			});
+			readable.resume();
 		};
 
 		const writeChannel = function (wr, array) {
@@ -70,12 +71,49 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module('pipeline', ['pipe'], function (pipe) {
-		const path = require('path'), fs = require('fs');
-		return function (source) {
-			var size = arguments.length;
-			const argv = arguments, callback = argv[--size];
+	_.module('logger', function () {
+		return {
+			error: console.error
+		};
+	});
 
+	_.module('pipeline', ['logger', 'pipe'], function (logger, pipe) {
+		const path = require('path'), fs = require('fs');
+
+		const source = function (readable) {
+			return new Promise(function (resolve, reject) {
+				switch (typeof readable) {
+					case 'string':
+						fs.stat(readable, function (err, stats) {
+							if (err) {
+								reject(new Error());
+								return;
+							}
+							if (stats.isFile()) {
+								resolve({rd: fs.createReadStream(readable)});
+								return;
+							}
+							if (stats.isDirectory()) {
+								fs.readdir(readable, function (err, files) {
+									resolve({
+										rd: _.map(files, function (file) {
+											return path.parse([readable, file].join("/"))
+										})
+									});
+								});
+								return;
+							}
+							reject(new Error());
+						});
+						break;
+					default:
+						resolve({rd: readable});
+						break;
+				}
+			});
+		};
+
+		const target = function (callback) {
 			const wrapper = function (value) {
 				const result = callback(value);
 				if (result) {
@@ -84,45 +122,43 @@ module.exports = function (_) {
 					});
 				}
 			};
-
-			const closure = function () {
-				var target = {
+			return Promise.resolve({
+				wr: {
 					write: wrapper,
 					end: function () {
 					}
-				};
-				while (size > 1) {
-					pipe(argv[--size].rd, target);
-					target = argv[size].wr;
 				}
-				pipe(source, target);
-			};
+			});
+		};
 
-			switch (typeof source) {
-				case 'string':
-					fs.stat(source, function (err, stats) {
-						if (err) {
-							throw err;
-						}
-						if (stats.isFile()) {
-							source = fs.createReadStream(source);
-							closure();
-						} else if (stats.isDirectory()) {
-							fs.readdir(source, function (err, files) {
-								source = _.map(files, function (file) {
-									return path.parse([source, file].join("/"))
-								});
-								closure();
-							});
-						} else {
-							throw new Error();
-						}
-					});
-					break;
-				default:
-					closure();
-					break;
+		const link = function (node) {
+			return Promise.resolve(node);
+		};
+
+		const error = function (e) {
+			console.error(e);
+		};
+
+		return function () {
+			var i, size = arguments.length;
+			const chain = new Array(size--);
+
+			chain[0] = source(arguments[0]);
+			chain[0].catch(error);
+			for (i = 1; i < size; ++i) {
+				chain[i] = link(arguments[i]);
+				chain[i].catch(error);
 			}
+			chain[i] = target(arguments[i]);
+			chain[i].catch(error);
+
+			Promise.all(chain).then(function (array) {
+				var target;
+				while (i > 0) {
+					target = array[i--];
+					pipe(array[i].rd, target.wr);
+				}
+			}).catch(error);
 		};
 	});
 
@@ -223,6 +259,9 @@ module.exports = function (_) {
 					result[new Date(key).toISOString()] = _.map(value, recurse);
 				});
 				channel.write(o.wr, result);
+			},
+			end: function() {
+				channel.write(o.wr, null);
 			}
 		});
 
@@ -242,6 +281,9 @@ module.exports = function (_) {
 						channel.write(ch.wr, chunk);
 					}
 				})
+			},
+			end: function() {
+
 			}
 		});
 
@@ -308,6 +350,9 @@ module.exports = function (_) {
 
 					channel.write(o.wr, null);
 				});
+			},
+			end: function() {
+				channel.write(o.wr, null);
 			}
 		});
 
@@ -335,6 +380,9 @@ module.exports = function (_) {
 					channel.write(x.wr, null);
 				});
 				pipe(x.rd, parser);
+			},
+			end: function() {
+				throw new Error("cannot close csv service stream");
 			}
 		});
 		return ch.wr;
@@ -344,8 +392,8 @@ module.exports = function (_) {
 		const ch = channel.create(), i = channel.create(true), o = channel.create(true);
 		var result = {};
 
-		const updater = function(result) {
-			return function(value) {
+		const updater = function (result) {
+			return function (value) {
 				return value ? _.concat(value, result) : result;
 			};
 		};
