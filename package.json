@@ -3,6 +3,7 @@
 	"version": "0.0.1-SNAPSHOT",
 	"main": "src/main/index.js",
 	"dependencies": {
+		"composix": "^0.1.3",
 		"csv-parse": "^2.0.0",
 		"js-yaml": "^3.10.0"
 	}

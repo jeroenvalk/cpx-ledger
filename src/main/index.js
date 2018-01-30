@@ -113,9 +113,26 @@ module.exports = function (_) {
 			});
 		};
 
-		const target = function (callback) {
+		const target = function (callback, resolve) {
+			var n = 0;
+
+			const all = [];
+
+			const eof = function() {
+				Promise.all(all).then(function() {
+					resolve(n);
+				})
+			};
+
+			const self = {
+				pipeline: function() {
+					all.push(pipeline.apply(null, arguments));
+				}
+			};
+
 			const wrapper = function (value) {
-				const result = callback(value);
+				++n;
+				const result = callback.call(self, value);
 				if (result) {
 					_.each(result, function (value, key) {
 						fs.writeFileSync(key, value);
@@ -125,8 +142,7 @@ module.exports = function (_) {
 			return Promise.resolve({
 				wr: {
 					write: wrapper,
-					end: function () {
-					}
+					end: eof
 				}
 			});
 		};
@@ -139,27 +155,32 @@ module.exports = function (_) {
 			console.error(e);
 		};
 
-		return function () {
-			var i, size = arguments.length;
-			const chain = new Array(size--);
+		const pipeline = function () {
+			const argv = arguments;
+			return new Promise(function(resolve) {
+				var i, size = argv.length;
+				const chain = new Array(size--);
 
-			chain[0] = source(arguments[0]);
-			chain[0].catch(error);
-			for (i = 1; i < size; ++i) {
-				chain[i] = link(arguments[i]);
-				chain[i].catch(error);
-			}
-			chain[i] = target(arguments[i]);
-			chain[i].catch(error);
-
-			Promise.all(chain).then(function (array) {
-				var target;
-				while (i > 0) {
-					target = array[i--];
-					pipe(array[i].rd, target.wr);
+				chain[0] = source(argv[0]);
+				chain[0].catch(error);
+				for (i = 1; i < size; ++i) {
+					chain[i] = link(argv[i]);
+					chain[i].catch(error);
 				}
-			}).catch(error);
+				chain[i] = target(argv[i], resolve);
+				chain[i].catch(error);
+
+				Promise.all(chain).then(function (array) {
+					var target;
+					while (i > 0) {
+						target = array[i--];
+						pipe(array[i].rd, target.wr);
+					}
+				}).catch(error);
+			});
 		};
+
+		return pipeline;
 	});
 
 	_.module('ledgerNormalize', ['channel', 'pipe'], function (channel, pipe) {
