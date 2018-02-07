@@ -77,7 +77,7 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module('pipeline', ['logger', 'pipe'], function (logger, pipe) {
+	_.module('pipeline', ['logger', 'channel', 'pipe'], function (logger, channel, pipe) {
 		const path = require('path'), fs = require('fs');
 
 		const source = function (readable) {
@@ -155,6 +155,16 @@ module.exports = function (_) {
 			console.error(e);
 		};
 
+		const forward = function(array, todo) {
+			if (todo.length > 0) {
+				const i = todo.pop();
+				pipe(array[i - 1], array[i]).then(function(result) {
+					array[i] = result;
+					forward(array, todo);
+				});
+			}
+		};
+
 		const pipeline = function () {
 			const argv = arguments;
 			return new Promise(function(resolve) {
@@ -171,11 +181,20 @@ module.exports = function (_) {
 				chain[i].catch(error);
 
 				Promise.all(chain).then(function (array) {
+					const todo = [];
 					var target;
 					while (i > 0) {
 						target = array[i--];
-						pipe(array[i].rd, target.wr);
+						switch(typeof array[i]) {
+							case 'function':
+								todo.push(i--);
+								break;
+							case 'object':
+								pipe(array[i].rd, target.wr);
+								break;
+						}
 					}
+					forward(array, todo);
 				}).catch(error);
 			});
 		};
