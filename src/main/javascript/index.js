@@ -18,58 +18,10 @@
 module.exports = function (_) {
 	'use strict';
 
-	_ = require('composix')(_);
+	const cpx_path = require('composix')(_);
+	cpx_path.push(__dirname);
 
-	_.module("pipe", ["channel"], function (channel) {
-		const readChannel = function (rd, callback) {
-			const recurse = function () {
-				channel.read(rd, 1, function (array) {
-					callback(array);
-					if (array.length > 0) {
-						recurse();
-					}
-				});
-			};
-			recurse();
-		};
-
-		const readStream = function (readable, callback) {
-			if (readable instanceof Array) {
-				for (var i = 0; i < readable.length; ++i) {
-					callback([readable[i]]);
-				}
-				callback([]);
-				return;
-			}
-			readable.on("data", function (chunk) {
-				callback([chunk]);
-			});
-			readable.on("end", function () {
-				callback([]);
-			});
-			readable.resume();
-		};
-
-		const writeChannel = function (wr, array) {
-			if (array.length > 0) {
-				channel.write(wr, array[0]);
-			} else {
-				channel.write(wr, null);
-			}
-		};
-
-		const writeStream = function (writable, array) {
-			if (array.length > 0) {
-				writable.write(array[0]);
-			} else {
-				writable.end();
-			}
-		};
-
-		return function (source, target) {
-			(isFinite(source) ? readChannel : readStream)(source, _.curry(isFinite(target) ? writeChannel : writeStream)(target));
-		};
-	});
+	_.require('module')(_);
 
 	_.module('logger', function () {
 		return {
@@ -77,7 +29,7 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module('pipeline', ['logger', 'channel', 'pipe'], function (logger, channel, pipe) {
+	_.module('pipeline', ['logger', 'channel', 'pipe'], function (_, logger, channel, pipe) {
 		const path = require('path'), fs = require('fs');
 
 		const source = function (readable) {
@@ -202,7 +154,7 @@ module.exports = function (_) {
 		return pipeline;
 	});
 
-	_.module('ledgerNormalize', ['channel', 'pipe'], function (channel, pipe) {
+	_.module('ledgerNormalize', ['channel', 'pipe'], function (_, channel, pipe) {
 		const i = channel.create(true), o = channel.create(true);
 
 		const whitespace = function (str) {
@@ -311,7 +263,7 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module("flatten", ["channel", "pipe"], function (channel, pipe) {
+	_.module("flatten", ["channel", "pipe"], function (_, channel, pipe) {
 		const ch = channel.create(true);
 
 		pipe(ch.rd, {
@@ -330,7 +282,7 @@ module.exports = function (_) {
 		return ch.wr;
 	});
 
-	_.module("stdout", ["channel", "pipe"], function (channel, pipe) {
+	_.module("stdout", ["channel", "pipe"], function (_, channel, pipe) {
 		const ch = channel.create();
 		pipe(ch.rd, {
 			write: function (chunk) {
@@ -342,7 +294,7 @@ module.exports = function (_) {
 		return ch.wr;
 	});
 
-	_.module("ledgerExport", ["channel", "pipe"], function (channel, pipe) {
+	_.module("ledgerExport", ["channel", "pipe"], function (_, channel, pipe) {
 		const i = channel.create(true), o = channel.create();
 
 		pipe(i.rd, {
@@ -402,7 +354,7 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module("csv", ["channel", "pipe"], function (channel, pipe) {
+	_.module("csv", ["channel", "pipe"], function (_, channel, pipe) {
 		const ch = channel.create(true);
 		pipe(ch.rd, {
 			write: function (x) {
@@ -428,7 +380,7 @@ module.exports = function (_) {
 		return ch.wr;
 	});
 
-	_.module("importKraken", ["channel", "pipe", "csv", "ledgerNormalize"], function (channel, pipe, csv, ldgr) {
+	_.module("importKraken", ["channel", "pipe", "csv", "ledgerNormalize"], function (_, channel, pipe, csv, ldgr) {
 		const ch = channel.create(), i = channel.create(true), o = channel.create(true);
 		var result = {};
 
@@ -510,5 +462,5 @@ module.exports = function (_) {
 		};
 	});
 
-	return _;
+	return cpx_path;
 };
