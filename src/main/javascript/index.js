@@ -29,7 +29,7 @@ module.exports = function (_) {
 		};
 	});
 
-	_.module('pipeline', ['logger', 'channel', 'pipe'], function (_, logger, channel, pipe) {
+	_.module('pipeline', ['logger', 'channel', 'pipe', 'source', 'target', 'sourceArray'], function (_, logger, channel, pipe) {
 		const path = require('path'), fs = require('fs');
 
 		const source = function (readable) {
