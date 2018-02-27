@@ -255,8 +255,8 @@ module.exports = function (_) {
 		return ch.wr;
 	});
 
-	_.module("importKraken", ["channel", "pipe", "csv", "ledgerNormalize"], function (_, channel, pipe, csv, ldgr) {
-		const ch = channel.create(), i = channel.create(true), o = channel.create(true);
+	_.module("importKraken", ["channel", "pipe"], function (_, channel, pipe) {
+		const i = channel.create(true), o = channel.create(true);
 		var result = {};
 
 		const updater = function (result) {
@@ -322,17 +322,14 @@ module.exports = function (_) {
 					}
 				});
 				channel.write(o.wr, result);
+				channel.write(o.wr, null);
 				result = {};
 			}
 		});
 
-		channel.write(csv, {
-			rd: ch.rd,
-			wr: i.wr
-		});
-
 		return {
-			wr: ch.wr,
+			type: 'node',
+			wr: i.wr,
 			rd: o.rd
 		};
 	});
