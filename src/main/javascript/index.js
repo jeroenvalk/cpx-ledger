@@ -18,10 +18,11 @@
 module.exports = function (_) {
 	'use strict';
 
-	const cpx_path = require('composix')(_);
-	cpx_path.push(__dirname);
-
+	_ = require('composix')(_);
+	_.require.search.push(__dirname);
+	_.require('plugin')(_);
 	_.require('module')(_);
+	_.require('target');
 
 	_.module('logger', function () {
 		return {
@@ -130,7 +131,7 @@ module.exports = function (_) {
 			end: function() {
 				channel.write(o.wr, null);
 			}
-		});
+		}).catch(console.error);
 
 		return {
 			rd: o.rd,
@@ -152,7 +153,7 @@ module.exports = function (_) {
 			end: function() {
 
 			}
-		});
+		}).catch(console.error);
 
 		return ch.wr;
 	});
@@ -165,7 +166,7 @@ module.exports = function (_) {
 			},
 			end: function () {
 			}
-		});
+		}).catch(console.error);
 		return ch.wr;
 	});
 
@@ -221,7 +222,7 @@ module.exports = function (_) {
 			end: function() {
 				channel.write(o.wr, null);
 			}
-		});
+		}).catch(console.error);
 
 		return {
 			rd: o.rd,
@@ -251,7 +252,7 @@ module.exports = function (_) {
 			end: function() {
 				throw new Error("cannot close csv service stream");
 			}
-		});
+		}).catch(console.error);
 		return ch.wr;
 	});
 
@@ -325,7 +326,7 @@ module.exports = function (_) {
 				channel.write(o.wr, null);
 				result = {};
 			}
-		});
+		}).catch(console.error);
 
 		return {
 			type: 'node',
@@ -334,5 +335,5 @@ module.exports = function (_) {
 		};
 	});
 
-	return cpx_path;
+	return _;
 };
