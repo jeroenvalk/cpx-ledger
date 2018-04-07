@@ -15,14 +15,11 @@
  * along with ComPosiX. If not, see <http://www.gnu.org/licenses/>.
  */
 
-module.exports = function (_, dirname) {
+module.exports = function (_, config) {
 	'use strict';
 
-	_ = require('composix')(_);
-	const search = _.require.search;
-	search.push(__dirname);
-	search.push(dirname);
-
+	config.search.push(__dirname);
+	_ = require('composix')(_, config);
 	_.require('plugin')(_);
 	_.require('module')(_);
 	_.require('target');
