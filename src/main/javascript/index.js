@@ -19,9 +19,7 @@ module.exports = function (_, config) {
 	'use strict';
 
 	config.search.push(__dirname);
-	_ = require('composix')(_, config);
-	_.require('plugin')(_);
-	_.require('module')(_);
+	_ = require('composix')(_, _.extend(config, {enforce: true}));
 	_.require('target');
 
 	_.module('logger', function () {
